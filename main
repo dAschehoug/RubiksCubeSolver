@@ -1,0 +1,1230 @@
+"""
+This Program is written for Jetson Nano
+as part of a B.sc at the University in Agder by:
+Daniel Wildisen Aschehoug and Marius Valberg
+"""
+
+import twophase.solver as sv
+import cv2 as cv
+import numpy as np
+from random import randint
+import serial as ser
+import time
+import subprocess
+import twophase.cubie as cubie
+
+#time.sleep(5)
+#Globals for communication
+serA = ser.Serial("/dev/ttyACM0", 115200)
+time.sleep(2)
+serA.flush()
+serP = ser.Serial("/dev/ttyTHS1", 115200)
+time.sleep(2)
+serP.flush()
+# -------------------------------------------------
+
+#Globals for Algorithm
+cString = list("DDDDUDDDDLLLLRLLLLBBBBFBBBBUUUUDUUUURRRRLRRRRFFFFBFFFF")
+rString = list("UUUUUUUUURRRRRRRRRFFFFFFFFFDDDDDDDDDLLLLLLLLLBBBBBBBBB")
+posPack = list("URFDLB")
+bufferString = list("")
+# -------------------------------------------------
+
+#Globals for Camera Vision
+lowGreen = np.array([31, 0, 20]) #U
+highGreen = np.array([81, 255, 255]) #U
+lowYellow = np.array([7, 0, 32]) #R
+highYellow = np.array([27, 255, 255]) #R
+lowPink = np.array([171,108,53]) #F
+highPink = np.array([255,255,255]) #F
+lowBlue = np.array([97,0,27]) #D
+highBlue = np.array([140,255,255]) #D
+lowWhite = np.array([0,0,70]) #L
+highWhite = np.array([255,255,255]) #L
+lowRed = np.array([0,0,58]) #B
+highRed = np.array([6,255,255]) #B
+# Consider creating unique masks for the different cameras if the intervals creates problems, or changing camera
+f = 0
+
+uy = -10
+ux = 0
+cc = cubie.CubieCube()
+rx = 0
+ry = 0
+# Top Camera
+upix1 = np.float32([[124+ux,391+uy], [169+ux, 369+uy], [231+ux,393+uy], [190+ux, 413+uy]])
+upix2 = np.float32([[171+ux, 362+uy], [231+ux,333+uy], [286+ux,367+uy], [240+ux,387+uy]])
+upix3 = np.float32([[238+ux,337+uy], [306+ux,306+uy], [375+ux,336+uy], [308+ux,366+uy]])
+upix4 = np.float32([[195+ux,417+uy], [248+ux,397+uy], [286+ux,419+uy], [260+ux,437+uy]])
+upix6 = np.float32([[330+ux,364+uy], [386+ux,336+uy], [445+ux,361+uy], [381+ux,386+uy]])
+upix7 = np.float32([[264+ux,440+uy], [311+ux,424+uy], [360+ux,438+uy], [313+ux,457+uy]])
+upix8 = np.float32([[328+ux,423+uy], [375+ux,396+uy], [426+ux,412+uy], [368+ux,436+uy]])
+upix9 = np.float32([[391+ux,391+uy], [455+ux,360+uy], [500+ux,382+uy], [436+ux,408+uy]])
+
+#Top Camera
+rpix1 = np.float32([[461+rx,345+ry], [461+rx,291+ry], [483+rx,303+ry], [502+rx,356+ry]])
+rpix2 = np.float32([[403+rx,316+ry], [398+rx,257+ry], [432+rx,273+ry], [442+rx,337+ry]])
+rpix3 = np.float32([[330+rx,275+ry], [330+rx,208+ry], [377+rx,235+ry], [386+rx,300+ry]])
+rpix4 = np.float32([[446+rx,257+ry], [446+rx,217+ry], [468+rx,227+ry], [480+rx,274+ry]])
+rpix6 = np.float32([[325+rx,185+ry], [316+rx,130+ry], [369+rx,165+ry], [373+rx,212+ry]])
+rpix7 = np.float32([[431+rx,187+ry], [428+rx,150+ry], [455+rx,168+ry], [465+rx,212+ry]])
+rpix8 = np.float32([[383+rx,159+ry], [374+rx,110+ry], [416+rx,140+ry], [419+rx,177+ry]])
+rpix9 = np.float32([[321+rx,114+ry], [317+rx,72+ry], [358+rx,100+ry], [362+rx,146+ry]])
+#Bottom Camera
+fpix1 = np.float32([[305,125], [307,91], [354,132], [357,164]])
+fpix2 = np.float32([[372,181], [368,141], [410,177], [414,211]])
+fpix3 = np.float32([[430,228], [428,189], [460,209], [464,253]])
+fpix4 = np.float32([[311,192], [309,146], [356,183], [360,224]])
+fpix6 = np.float32([[437,295], [430,248], [464,271], [471,323]])
+fpix7 = np.float32([[318,276], [316,218], [367,254], [371,308]])
+fpix8 = np.float32([[387,327], [384,277], [421,299], [432,359]])
+fpix9 = np.float32([[449,379], [445,326], [472,345], [478,401]])
+#Bottom Camera
+dpix1 = np.float32([[251,329], [300,299], [358,333], [303,361]])
+dpix2 = np.float32([[326,376], [374,348], [419,381], [369,396]])
+dpix3 = np.float32([[376,415], [429,397], [468,422], [416,436]])
+dpix4 = np.float32([[180,380], [234,353], [280,376], [242,400]])
+dpix6 = np.float32([[322,442], [359,425], [393,440], [351,454]])
+dpix7 = np.float32([[121,406], [161,387], [215,411], [177,426]])
+dpix8 = np.float32([[194,435], [234,422], [272,440], [235,452]])
+dpix9 = np.float32([[258,460], [289,449], [331,461], [297,477]])
+#Bottom Camera
+lpix1 = np.float32([[143, 246], [150,207], [178,187], [176,222]])
+lpix2 = np.float32([[190,207], [193,175], [228,142], [225,186]])
+lpix3 = np.float32([[244,163], [247,128], [291,92], [289,125]])
+lpix4 = np.float32([[130,306], [138,263], [168,248], [164,287]])
+lpix6 = np.float32([[240,226], [244,186], [289,149], [292,191]])
+lpix7 = np.float32([[117,385], [124,330], [161,314], [152,367]])
+lpix8 = np.float32([[171, 361], [182,301], [222,277], [220,333]])
+lpix9 = np.float32([[237,308], [244,259], [292,229], [295,271]])
+#Top Camera
+bpix1 = np.float32([[251,301+f], [251,238+f], [308,210+f], [312,267+f]])
+bpix2 = np.float32([[178,333+f], [189,271+f], [229,247+f], [232,304+f]])
+bpix3 = np.float32([[125,358+f], [134,303+f], [171,281+f], [165,335+f]])
+bpix4 = np.float32([[253,215+f], [251,167+f], [303,128+f], [307,183+f]])
+bpix6 = np.float32([[139,280+f], [146,238+f], [176,224+f], [179,257+f]])
+bpix7 = np.float32([[248,144+f], [248,101+f], [295,60+f], [297,105+f]])
+bpix8 = np.float32([[198,173+f], [201,144+f], [239,112+f], [236,158+f]])
+bpix9 = np.float32([[154,220+f], [160,177+f], [190,158+f], [187,201+f]])
+# -----------------------------------------------------
+
+#Initiating Cameras
+botSource = cv.VideoCapture(0)
+topSource = cv.VideoCapture(1)
+#setup for bottom camera
+subprocess.run(['v4l2-ctl', '--device=/dev/video0', '--set-ctrl=white_balance_temperature_auto=0'])
+subprocess.run(['v4l2-ctl', '--device=/dev/video0', '--set-ctrl=focus_auto=0'])
+subprocess.run(['v4l2-ctl', '--device=/dev/video0', '--set-ctrl=brightness=128'])
+subprocess.run(['v4l2-ctl', '--device=/dev/video0', '--set-ctrl=contrast=32'])
+subprocess.run(['v4l2-ctl', '--device=/dev/video0', '--set-ctrl=saturation=32'])
+subprocess.run(['v4l2-ctl', '--device=/dev/video0', '--set-ctrl=gain=64'])
+subprocess.run(['v4l2-ctl', '--device=/dev/video0', '--set-ctrl=white_balance_temperature=4880'])
+subprocess.run(['v4l2-ctl', '--device=/dev/video0', '--set-ctrl=sharpness=255'])
+subprocess.run(['v4l2-ctl', '--device=/dev/video0', '--set-ctrl=backlight_compensation=1'])
+subprocess.run(['v4l2-ctl', '--device=/dev/video0', '--set-ctrl=focus_absolute=119'])
+#setup for top camera
+subprocess.run(['v4l2-ctl', '--device=/dev/video1', '--set-ctrl=white_balance_temperature_auto=0'])
+subprocess.run(['v4l2-ctl', '--device=/dev/video1', '--set-ctrl=focus_auto=0'])
+subprocess.run(['v4l2-ctl', '--device=/dev/video1', '--set-ctrl=brightness=128'])
+subprocess.run(['v4l2-ctl', '--device=/dev/video1', '--set-ctrl=contrast=32'])
+subprocess.run(['v4l2-ctl', '--device=/dev/video1', '--set-ctrl=saturation=32'])
+subprocess.run(['v4l2-ctl', '--device=/dev/video1', '--set-ctrl=gain=65'])
+subprocess.run(['v4l2-ctl', '--device=/dev/video1', '--set-ctrl=white_balance_temperature=4880'])
+subprocess.run(['v4l2-ctl', '--device=/dev/video1', '--set-ctrl=sharpness=22'])
+subprocess.run(['v4l2-ctl', '--device=/dev/video1', '--set-ctrl=backlight_compensation=1'])
+subprocess.run(['v4l2-ctl', '--device=/dev/video1', '--set-ctrl=focus_absolute=102'])
+# This only works if top camera is plugged in after bottom camera
+
+
+
+def moveU1():
+    newString = list(rString)
+    newString[0] = rString[6]
+    newString[1] = rString[3]
+    newString[2] = rString[0]
+    newString[3] = rString[7]
+    newString[5] = rString[1]
+    newString[6] = rString[8]
+    newString[7] = rString[5]
+    newString[8] = rString[2]
+    newString[18] = rString[9]
+    newString[19] = rString[10]
+    newString[20] = rString[11]
+    newString[36] = rString[18]
+    newString[37] = rString[19]
+    newString[38] = rString[20]
+    newString[45] = rString[36]
+    newString[46] = rString[37]
+    newString[47] = rString[38]
+    newString[9] = rString[45]
+    newString[10] = rString[46]
+    newString[11] = rString[47]
+    rString = newString
+
+def moveR1():
+    newString = list(rString)
+    newString[9] = rString[15]
+    newString[10] = rString[12]
+    newString[11] = rString[9]
+    newString[12] = rString[16]
+    newString[14] = rString[10]
+    newString[15] = rString[17]
+    newString[16] = rString[14]
+    newString[17] = rString[11]
+
+    newString[2] = rString[20]
+    newString[5] = rString[23]
+    newString[8] = rString[26]
+
+    newString[20] = rString[29]
+    newString[23] = rString[32]
+    newString[26] = rString[35]
+
+    newString[45] = rString[8]
+    newString[48] = rString[5]
+    newString[51] = rString[2]
+
+    newString[29] = rString[51]
+    newString[32] = rString[48]
+    newString[35] = rString[45]
+    rString = newString
+
+def moveF1():
+    newString = list(rString)
+    newString[18] = rString[24]
+    newString[19] = rString[21]
+    newString[20] = rString[18]
+    newString[21] = rString[25]
+    newString[22] = rString[19]
+    newString[23] = rString[26]
+    newString[24] = rString[23]
+    newString[25] = rString[20]
+
+    newString[6] = rString[44]
+    newString[7] = rString[41]
+    newString[8] = rString[38]
+
+    newString[38] = rString[27]
+    newString[41] = rString[28]
+    newString[44] = rString[29]
+
+    newString[9] = rString[6]
+    newString[12] = rString[7]
+    newString[15] = rString[8]
+
+    newString[27] = rString[15]
+    newString[28] = rString[12]
+    newString[29] = rString[9]
+    rString = newString
+
+def moveD1():
+    newString = list(rString)
+    newString[27] = rString[33]
+    newString[28] = rString[30]
+    newString[29] = rString[27]
+    newString[30] = rString[34]
+    newString[32] = rString[28]
+    newString[33] = rString[35]
+    newString[34] = rString[32]
+    newString[35] = rString[29]
+
+    newString[24] = rString[42]
+    newString[25] = rString[43]
+    newString[26] = rString[44]
+
+    newString[15] = rString[24]
+    newString[16] = rString[25]
+    newString[17] = rString[26]
+
+    newString[42] = rString[51]
+    newString[43] = rString[52]
+    newString[44] = rString[53]
+
+    newString[51] = rString[15]
+    newString[52] = rString[16]
+    newString[53] = rString[17]
+    rString = newString
+
+def moveL1():
+    newString = list(rString)
+    newString[36] = rString[42]
+    newString[37] = rString[39]
+    newString[38] = rString[36]
+    newString[39] = rString[43]
+    newString[41] = rString[37]
+    newString[42] = rString[44]
+    newString[43] = rString[41]
+    newString[44] = rString[38]
+
+    newString[18] = rString[0]
+    newString[21] = rString[3]
+    newString[24] = rString[6]
+
+    newString[0] = rString[53]
+    newString[3] = rString[50]
+    newString[6] = rString[47]
+
+    newString[47] = rString[33]
+    newString[50] = rString[30]
+    newString[53] = rString[27]
+
+    newString[27] = rString[18]
+    newString[30] = rString[21]
+    newString[33] = rString[24]
+    rString = newString
+
+def moveB1():
+    newString = list(rString)
+    newString[45] = rString[51]
+    newString[46] = rString[48]
+    newString[47] = rString[45]
+    newString[48] = rString[52]
+    newString[49] = rString[46]
+    newString[50] = rString[53]
+    newString[51] = rString[50]
+    newString[52] = rString[47]
+
+    newString[0] = rString[11]
+    newString[1] = rString[14]
+    newString[2] = rString[37]
+
+    newString[36] = rString[2]
+    newString[39] = rString[1]
+    newString[42] = rString[0]
+
+    newString[33] = rString[36]
+    newString[34] = rString[39]
+    newString[35] = rString[42]
+
+    newString[11] = rString[35]
+    newString[14] = rString[34]
+    newString[17] = rString[33]
+    rString = newString
+
+
+# Move a Single Motor a Single Step
+def sendStep():
+    moveMessage = "X"
+    moveMessage += line
+    moveMessage += "\n"
+    serA.write(bytes(moveMessage, "UTF-8"))
+
+
+# Randomly scramble the cube
+def scrambleCube():
+    cc.randomize()
+    fc = cc.to_facelet_cube()
+    ss = fc.to_string()
+    ss = sv.solve(ss, 22, 0)
+    bufferString = list("t")
+    exString = list(ss)
+    for x in range(len(exString)):
+        if exString[x] == "(":
+            break
+        if exString[x] == "U":
+            if exString[x+1] == "1":
+                bufferString.append("A")
+            elif exString[x+1] == "2":
+                bufferString.append("B")
+            elif exString[x+1] == "3":
+                bufferString.append("C")
+        elif exString[x] == "R":
+            if exString[x+1] == "1":
+                bufferString.append("D")
+            elif exString[x+1] == "2":
+                bufferString.append("E")
+            elif exString[x+1] == "3":
+                bufferString.append("F")
+        elif exString[x] == "F":
+            if exString[x+1] == "1":
+                bufferString.append("G")
+            elif exString[x+1] == "2":
+                bufferString.append("H")
+            elif exString[x+1] == "3":
+                bufferString.append("I")
+        elif exString[x] == "D":
+            if exString[x+1] == "1":
+                bufferString.append("J")
+            elif exString[x+1] == "2":
+                bufferString.append("K")
+            elif exString[x+1] == "3":
+                bufferString.append("L")
+        elif exString[x] == "L":
+            if exString[x+1] == "1":
+                bufferString.append("M")
+            elif exString[x+1] == "2":
+                bufferString.append("N")
+            elif exString[x+1] == "3":
+                bufferString.append("O")
+        elif exString[x] == "B":
+            if exString[x+1] == "1":
+                bufferString.append("P")
+            elif exString[x+1] == "2":
+                bufferString.append("Q")
+            elif exString[x+1] == "3":
+                bufferString.append("R")
+    msg2Send = "".join(bufferString)
+    msg2Send += "\n"
+    serA.write(msg2Send.encode("utf-8"))
+
+#Solve the Rubiks cube with camera vision
+def findFaces():
+    ret, frameTop = topSource.read()
+    ret2, frameBot = botSource.read()
+    topHSV = cv.cvtColor(frameTop, cv.COLOR_BGR2HSV, 3)
+    botHSV = cv.cvtColor(frameBot, cv.COLOR_BGR2HSV, 3)
+    """cv.imshow('Top Camera', frameTop)
+    cv.imshow('Bottom Camera', frameBot)"""
+    pix = np.float32([[0,50], [0,0], [50,0], [50,50]])
+    print("starter å finne faces")
+    # Finding Up side
+    M = cv.getPerspectiveTransform(upix1, pix)
+    dst = cv.warpPerspective(topHSV, M,(50,50))
+    gMask = cv.inRange(dst, lowGreen, highGreen)
+    yMask = cv.inRange(dst, lowYellow, highYellow)
+    pMask = cv.inRange(dst, lowPink, highPink)
+    bMask = cv.inRange(dst, lowBlue, highBlue)
+    rMask = cv.inRange(dst, lowRed, highRed)
+    wMask = cv.inRange(dst, lowWhite, highWhite) - gMask - yMask - pMask - bMask - rMask
+    sumc = np.array([np.sum(gMask), np.sum(yMask), np.sum(pMask), np.sum(bMask), np.sum(wMask), np.sum(rMask)])
+    for x in range(6):
+        if max(sumc) == sumc[x]:
+            cString[0] = posPack[x]
+    M = cv.getPerspectiveTransform(upix2, pix)
+    dst = cv.warpPerspective(topHSV, M,(50,50))
+    gMask = cv.inRange(dst, lowGreen, highGreen)
+    yMask = cv.inRange(dst, lowYellow, highYellow)
+    pMask = cv.inRange(dst, lowPink, highPink)
+    bMask = cv.inRange(dst, lowBlue, highBlue)
+    rMask = cv.inRange(dst, lowRed, highRed)
+    wMask = cv.inRange(dst, lowWhite, highWhite) - gMask - yMask - pMask - bMask - rMask
+    sumc = np.array([np.sum(gMask), np.sum(yMask), np.sum(pMask), np.sum(bMask), np.sum(wMask), np.sum(rMask)])
+    for x in range(6):
+        if max(sumc) == sumc[x]:
+            cString[1] = posPack[x]
+    M = cv.getPerspectiveTransform(upix3, pix)
+    dst = cv.warpPerspective(topHSV, M,(50,50))
+    gMask = cv.inRange(dst, lowGreen, highGreen)
+    yMask = cv.inRange(dst, lowYellow, highYellow)
+    pMask = cv.inRange(dst, lowPink, highPink)
+    bMask = cv.inRange(dst, lowBlue, highBlue)
+    rMask = cv.inRange(dst, lowRed, highRed)
+    wMask = cv.inRange(dst, lowWhite, highWhite) - gMask - yMask - pMask - bMask - rMask
+    sumc = np.array([np.sum(gMask), np.sum(yMask), np.sum(pMask), np.sum(bMask), np.sum(wMask), np.sum(rMask)])
+    for x in range(6):
+        if max(sumc) == sumc[x]:
+            cString[2] = posPack[x]
+    M = cv.getPerspectiveTransform(upix4, pix)
+    dst = cv.warpPerspective(topHSV, M,(50,50))
+    gMask = cv.inRange(dst, lowGreen, highGreen)
+    yMask = cv.inRange(dst, lowYellow, highYellow)
+    pMask = cv.inRange(dst, lowPink, highPink)
+    bMask = cv.inRange(dst, lowBlue, highBlue)
+    rMask = cv.inRange(dst, lowRed, highRed)
+    wMask = cv.inRange(dst, lowWhite, highWhite) - gMask - yMask - pMask - bMask - rMask
+    sumc = np.array([np.sum(gMask), np.sum(yMask), np.sum(pMask), np.sum(bMask), np.sum(wMask), np.sum(rMask)])
+    for x in range(6):
+        if max(sumc) == sumc[x]:
+            cString[3] = posPack[x]
+    M = cv.getPerspectiveTransform(upix6, pix)
+    dst = cv.warpPerspective(topHSV, M,(50,50))
+    gMask = cv.inRange(dst, lowGreen, highGreen)
+    yMask = cv.inRange(dst, lowYellow, highYellow)
+    pMask = cv.inRange(dst, lowPink, highPink)
+    bMask = cv.inRange(dst, lowBlue, highBlue)
+    rMask = cv.inRange(dst, lowRed, highRed)
+    wMask = cv.inRange(dst, lowWhite, highWhite) - gMask - yMask - pMask - bMask - rMask
+    sumc = np.array([np.sum(gMask), np.sum(yMask), np.sum(pMask), np.sum(bMask), np.sum(wMask), np.sum(rMask)])
+    for x in range(6):
+        if max(sumc) == sumc[x]:
+            cString[5] = posPack[x]
+    M = cv.getPerspectiveTransform(upix7, pix)
+    dst = cv.warpPerspective(topHSV, M,(50,50))
+    gMask = cv.inRange(dst, lowGreen, highGreen)
+    yMask = cv.inRange(dst, lowYellow, highYellow)
+    pMask = cv.inRange(dst, lowPink, highPink)
+    bMask = cv.inRange(dst, lowBlue, highBlue)
+    rMask = cv.inRange(dst, lowRed, highRed)
+    wMask = cv.inRange(dst, lowWhite, highWhite) - gMask - yMask - pMask - bMask - rMask
+    sumc = np.array([np.sum(gMask), np.sum(yMask), np.sum(pMask), np.sum(bMask), np.sum(wMask), np.sum(rMask)])
+    for x in range(6):
+        if max(sumc) == sumc[x]:
+            cString[6] = posPack[x]
+    M = cv.getPerspectiveTransform(upix8, pix)
+    dst = cv.warpPerspective(topHSV, M,(50,50))
+    gMask = cv.inRange(dst, lowGreen, highGreen)
+    yMask = cv.inRange(dst, lowYellow, highYellow)
+    pMask = cv.inRange(dst, lowPink, highPink)
+    bMask = cv.inRange(dst, lowBlue, highBlue)
+    rMask = cv.inRange(dst, lowRed, highRed)
+    wMask = cv.inRange(dst, lowWhite, highWhite) - gMask - yMask - pMask - bMask - rMask
+    sumc = np.array([np.sum(gMask), np.sum(yMask), np.sum(pMask), np.sum(bMask), np.sum(wMask), np.sum(rMask)])
+    for x in range(6):
+        if max(sumc) == sumc[x]:
+            cString[7] = posPack[x]
+    M = cv.getPerspectiveTransform(upix9, pix)
+    dst = cv.warpPerspective(topHSV, M,(50,50))
+    gMask = cv.inRange(dst, lowGreen, highGreen)
+    yMask = cv.inRange(dst, lowYellow, highYellow)
+    pMask = cv.inRange(dst, lowPink, highPink)
+    bMask = cv.inRange(dst, lowBlue, highBlue)
+    rMask = cv.inRange(dst, lowRed, highRed)
+    wMask = cv.inRange(dst, lowWhite, highWhite) - gMask - yMask - pMask - bMask - rMask
+    sumc = np.array([np.sum(gMask), np.sum(yMask), np.sum(pMask), np.sum(bMask), np.sum(wMask), np.sum(rMask)])
+    for x in range(6):
+        if max(sumc) == sumc[x]:
+            cString[8] = posPack[x]
+    
+    # Right Side --------------------------------------------------
+
+    M = cv.getPerspectiveTransform(rpix1, pix)
+    dst = cv.warpPerspective(topHSV, M,(50,50))
+    gMask = cv.inRange(dst, lowGreen, highGreen)
+    yMask = cv.inRange(dst, lowYellow, highYellow)
+    pMask = cv.inRange(dst, lowPink, highPink)
+    bMask = cv.inRange(dst, lowBlue, highBlue)
+    rMask = cv.inRange(dst, lowRed, highRed)
+    wMask = cv.inRange(dst, lowWhite, highWhite) - gMask - yMask - pMask - bMask - rMask
+    sumc = np.array([np.sum(gMask), np.sum(yMask), np.sum(pMask), np.sum(bMask), np.sum(wMask), np.sum(rMask)])
+    for x in range(6):
+        if max(sumc) == sumc[x]:
+            cString[9] = posPack[x]
+    M = cv.getPerspectiveTransform(rpix2, pix)
+    dst = cv.warpPerspective(topHSV, M,(50,50))
+    gMask = cv.inRange(dst, lowGreen, highGreen)
+    yMask = cv.inRange(dst, lowYellow, highYellow)
+    pMask = cv.inRange(dst, lowPink, highPink)
+    bMask = cv.inRange(dst, lowBlue, highBlue)
+    rMask = cv.inRange(dst, lowRed, highRed)
+    wMask = cv.inRange(dst, lowWhite, highWhite) - gMask - yMask - pMask - bMask - rMask
+    sumc = np.array([np.sum(gMask), np.sum(yMask), np.sum(pMask), np.sum(bMask), np.sum(wMask), np.sum(rMask)])
+    for x in range(6):
+        if max(sumc) == sumc[x]:
+            cString[10] = posPack[x]
+    M = cv.getPerspectiveTransform(rpix3, pix)
+    dst = cv.warpPerspective(topHSV, M,(50,50))
+    gMask = cv.inRange(dst, lowGreen, highGreen)
+    yMask = cv.inRange(dst, lowYellow, highYellow)
+    pMask = cv.inRange(dst, lowPink, highPink)
+    bMask = cv.inRange(dst, lowBlue, highBlue)
+    rMask = cv.inRange(dst, lowRed, highRed)
+    wMask = cv.inRange(dst, lowWhite, highWhite) - gMask - yMask - pMask - bMask - rMask
+    sumc = np.array([np.sum(gMask), np.sum(yMask), np.sum(pMask), np.sum(bMask), np.sum(wMask), np.sum(rMask)])
+    for x in range(6):
+        if max(sumc) == sumc[x]:
+            cString[11] = posPack[x]
+    M = cv.getPerspectiveTransform(rpix4, pix)
+    dst = cv.warpPerspective(topHSV, M,(50,50))
+    gMask = cv.inRange(dst, lowGreen, highGreen)
+    yMask = cv.inRange(dst, lowYellow, highYellow)
+    pMask = cv.inRange(dst, lowPink, highPink)
+    bMask = cv.inRange(dst, lowBlue, highBlue)
+    rMask = cv.inRange(dst, lowRed, highRed)
+    wMask = cv.inRange(dst, lowWhite, highWhite) - gMask - yMask - pMask - bMask - rMask
+    sumc = np.array([np.sum(gMask), np.sum(yMask), np.sum(pMask), np.sum(bMask), np.sum(wMask), np.sum(rMask)])
+    for x in range(6):
+        if max(sumc) == sumc[x]:
+            cString[12] = posPack[x]
+    M = cv.getPerspectiveTransform(rpix6, pix)
+    dst = cv.warpPerspective(topHSV, M,(50,50))
+    gMask = cv.inRange(dst, lowGreen, highGreen)
+    yMask = cv.inRange(dst, lowYellow, highYellow)
+    pMask = cv.inRange(dst, lowPink, highPink)
+    bMask = cv.inRange(dst, lowBlue, highBlue)
+    rMask = cv.inRange(dst, lowRed, highRed)
+    wMask = cv.inRange(dst, lowWhite, highWhite) - gMask - yMask - pMask - bMask - rMask
+    sumc = np.array([np.sum(gMask), np.sum(yMask), np.sum(pMask), np.sum(bMask), np.sum(wMask), np.sum(rMask)])
+    for x in range(6):
+        if max(sumc) == sumc[x]:
+            cString[14] = posPack[x]
+    M = cv.getPerspectiveTransform(rpix7, pix)
+    dst = cv.warpPerspective(topHSV, M,(50,50))
+    gMask = cv.inRange(dst, lowGreen, highGreen)
+    yMask = cv.inRange(dst, lowYellow, highYellow)
+    pMask = cv.inRange(dst, lowPink, highPink)
+    bMask = cv.inRange(dst, lowBlue, highBlue)
+    rMask = cv.inRange(dst, lowRed, highRed)
+    wMask = cv.inRange(dst, lowWhite, highWhite) - gMask - yMask - pMask - bMask - rMask
+    sumc = np.array([np.sum(gMask), np.sum(yMask), np.sum(pMask), np.sum(bMask), np.sum(wMask), np.sum(rMask)])
+    for x in range(6):
+        if max(sumc) == sumc[x]:
+            cString[15] = posPack[x]
+    M = cv.getPerspectiveTransform(rpix8, pix)
+    dst = cv.warpPerspective(topHSV, M,(50,50))
+    gMask = cv.inRange(dst, lowGreen, highGreen)
+    yMask = cv.inRange(dst, lowYellow, highYellow)
+    pMask = cv.inRange(dst, lowPink, highPink)
+    bMask = cv.inRange(dst, lowBlue, highBlue)
+    rMask = cv.inRange(dst, lowRed, highRed)
+    wMask = cv.inRange(dst, lowWhite, highWhite) - gMask - yMask - pMask - bMask - rMask
+    sumc = np.array([np.sum(gMask), np.sum(yMask), np.sum(pMask), np.sum(bMask), np.sum(wMask), np.sum(rMask)])
+    for x in range(6):
+        if max(sumc) == sumc[x]:
+            cString[16] = posPack[x]
+    M = cv.getPerspectiveTransform(rpix9, pix)
+    dst = cv.warpPerspective(topHSV, M,(50,50))
+    gMask = cv.inRange(dst, lowGreen, highGreen)
+    yMask = cv.inRange(dst, lowYellow, highYellow)
+    pMask = cv.inRange(dst, lowPink, highPink)
+    bMask = cv.inRange(dst, lowBlue, highBlue)
+    rMask = cv.inRange(dst, lowRed, highRed)
+    wMask = cv.inRange(dst, lowWhite, highWhite) - gMask - yMask - pMask - bMask - rMask
+    sumc = np.array([np.sum(gMask), np.sum(yMask), np.sum(pMask), np.sum(bMask), np.sum(wMask), np.sum(rMask)])
+    for x in range(6):
+        if max(sumc) == sumc[x]:
+            cString[17] = posPack[x]
+
+
+    # Front Side ----------------------------------------------
+    
+    M = cv.getPerspectiveTransform(fpix1, pix)
+    dst = cv.warpPerspective(botHSV, M,(50,50))
+    gMask = cv.inRange(dst, lowGreen, highGreen)
+    yMask = cv.inRange(dst, lowYellow, highYellow)
+    pMask = cv.inRange(dst, lowPink, highPink)
+    bMask = cv.inRange(dst, lowBlue, highBlue)
+    rMask = cv.inRange(dst, lowRed, highRed)
+    wMask = cv.inRange(dst, lowWhite, highWhite) - gMask - yMask - pMask - bMask - rMask
+    sumc = np.array([np.sum(gMask), np.sum(yMask), np.sum(pMask), np.sum(bMask), np.sum(wMask), np.sum(rMask)])
+    for x in range(6):
+        if max(sumc) == sumc[x]:
+            cString[18] = posPack[x]
+    M = cv.getPerspectiveTransform(fpix2, pix)
+    dst = cv.warpPerspective(botHSV, M,(50,50))
+    gMask = cv.inRange(dst, lowGreen, highGreen)
+    yMask = cv.inRange(dst, lowYellow, highYellow)
+    pMask = cv.inRange(dst, lowPink, highPink)
+    bMask = cv.inRange(dst, lowBlue, highBlue)
+    rMask = cv.inRange(dst, lowRed, highRed)
+    wMask = cv.inRange(dst, lowWhite, highWhite) - gMask - yMask - pMask - bMask - rMask
+    sumc = np.array([np.sum(gMask), np.sum(yMask), np.sum(pMask), np.sum(bMask), np.sum(wMask), np.sum(rMask)])
+    for x in range(6):
+        if max(sumc) == sumc[x]:
+            cString[19] = posPack[x]
+    M = cv.getPerspectiveTransform(fpix3, pix)
+    dst = cv.warpPerspective(botHSV, M,(50,50))
+    gMask = cv.inRange(dst, lowGreen, highGreen)
+    yMask = cv.inRange(dst, lowYellow, highYellow)
+    pMask = cv.inRange(dst, lowPink, highPink)
+    bMask = cv.inRange(dst, lowBlue, highBlue)
+    rMask = cv.inRange(dst, lowRed, highRed)
+    wMask = cv.inRange(dst, lowWhite, highWhite) - gMask - yMask - pMask - bMask - rMask
+    sumc = np.array([np.sum(gMask), np.sum(yMask), np.sum(pMask), np.sum(bMask), np.sum(wMask), np.sum(rMask)])
+    for x in range(6):
+        if max(sumc) == sumc[x]:
+            cString[20] = posPack[x]
+    M = cv.getPerspectiveTransform(fpix4, pix)
+    dst = cv.warpPerspective(botHSV, M,(50,50))
+    gMask = cv.inRange(dst, lowGreen, highGreen)
+    yMask = cv.inRange(dst, lowYellow, highYellow)
+    pMask = cv.inRange(dst, lowPink, highPink)
+    bMask = cv.inRange(dst, lowBlue, highBlue)
+    rMask = cv.inRange(dst, lowRed, highRed)
+    wMask = cv.inRange(dst, lowWhite, highWhite) - gMask - yMask - pMask - bMask - rMask
+    sumc = np.array([np.sum(gMask), np.sum(yMask), np.sum(pMask), np.sum(bMask), np.sum(wMask), np.sum(rMask)])
+    for x in range(6):
+        if max(sumc) == sumc[x]:
+            cString[21] = posPack[x]
+    M = cv.getPerspectiveTransform(fpix6, pix)
+    dst = cv.warpPerspective(botHSV, M,(50,50))
+    gMask = cv.inRange(dst, lowGreen, highGreen)
+    yMask = cv.inRange(dst, lowYellow, highYellow)
+    pMask = cv.inRange(dst, lowPink, highPink)
+    bMask = cv.inRange(dst, lowBlue, highBlue)
+    rMask = cv.inRange(dst, lowRed, highRed)
+    wMask = cv.inRange(dst, lowWhite, highWhite) - gMask - yMask - pMask - bMask - rMask
+    sumc = np.array([np.sum(gMask), np.sum(yMask), np.sum(pMask), np.sum(bMask), np.sum(wMask), np.sum(rMask)])
+    for x in range(6):
+        if max(sumc) == sumc[x]:
+            cString[23] = posPack[x]
+    M = cv.getPerspectiveTransform(fpix7, pix)
+    dst = cv.warpPerspective(botHSV, M,(50,50))
+    gMask = cv.inRange(dst, lowGreen, highGreen)
+    yMask = cv.inRange(dst, lowYellow, highYellow)
+    pMask = cv.inRange(dst, lowPink, highPink)
+    bMask = cv.inRange(dst, lowBlue, highBlue)
+    rMask = cv.inRange(dst, lowRed, highRed)
+    wMask = cv.inRange(dst, lowWhite, highWhite) - gMask - yMask - pMask - bMask - rMask
+    sumc = np.array([np.sum(gMask), np.sum(yMask), np.sum(pMask), np.sum(bMask), np.sum(wMask), np.sum(rMask)])
+    for x in range(6):
+        if max(sumc) == sumc[x]:
+            cString[24] = posPack[x]
+    M = cv.getPerspectiveTransform(fpix8, pix)
+    dst = cv.warpPerspective(botHSV, M,(50,50))
+    gMask = cv.inRange(dst, lowGreen, highGreen)
+    yMask = cv.inRange(dst, lowYellow, highYellow)
+    pMask = cv.inRange(dst, lowPink, highPink)
+    bMask = cv.inRange(dst, lowBlue, highBlue)
+    rMask = cv.inRange(dst, lowRed, highRed)
+    wMask = cv.inRange(dst, lowWhite, highWhite) - gMask - yMask - pMask - bMask - rMask
+    sumc = np.array([np.sum(gMask), np.sum(yMask), np.sum(pMask), np.sum(bMask), np.sum(wMask), np.sum(rMask)])
+    for x in range(6):
+        if max(sumc) == sumc[x]:
+            cString[25] = posPack[x]
+    M = cv.getPerspectiveTransform(fpix9, pix)
+    dst = cv.warpPerspective(botHSV, M,(50,50))
+    gMask = cv.inRange(dst, lowGreen, highGreen)
+    yMask = cv.inRange(dst, lowYellow, highYellow)
+    pMask = cv.inRange(dst, lowPink, highPink)
+    bMask = cv.inRange(dst, lowBlue, highBlue)
+    rMask = cv.inRange(dst, lowRed, highRed)
+    wMask = cv.inRange(dst, lowWhite, highWhite) - gMask - yMask - pMask - bMask - rMask
+    sumc = np.array([np.sum(gMask), np.sum(yMask), np.sum(pMask), np.sum(bMask), np.sum(wMask), np.sum(rMask)])
+    for x in range(6):
+        if max(sumc) == sumc[x]:
+            cString[26] = posPack[x]
+
+    # Down Side ---------------------------------------------------
+
+    M = cv.getPerspectiveTransform(dpix1, pix)
+    dst = cv.warpPerspective(botHSV, M,(50,50))
+    gMask = cv.inRange(dst, lowGreen, highGreen)
+    yMask = cv.inRange(dst, lowYellow, highYellow)
+    pMask = cv.inRange(dst, lowPink, highPink)
+    bMask = cv.inRange(dst, lowBlue, highBlue)
+    rMask = cv.inRange(dst, lowRed, highRed)
+    wMask = cv.inRange(dst, lowWhite, highWhite) - gMask - yMask - pMask - bMask - rMask
+    sumc = np.array([np.sum(gMask), np.sum(yMask), np.sum(pMask), np.sum(bMask), np.sum(wMask), np.sum(rMask)])
+    for x in range(6):
+        if max(sumc) == sumc[x]:
+            cString[27] = posPack[x]
+    M = cv.getPerspectiveTransform(dpix2, pix)
+    dst = cv.warpPerspective(botHSV, M,(50,50))
+    gMask = cv.inRange(dst, lowGreen, highGreen)
+    yMask = cv.inRange(dst, lowYellow, highYellow)
+    pMask = cv.inRange(dst, lowPink, highPink)
+    bMask = cv.inRange(dst, lowBlue, highBlue)
+    rMask = cv.inRange(dst, lowRed, highRed)
+    wMask = cv.inRange(dst, lowWhite, highWhite) - gMask - yMask - pMask - bMask - rMask
+    sumc = np.array([np.sum(gMask), np.sum(yMask), np.sum(pMask), np.sum(bMask), np.sum(wMask), np.sum(rMask)])
+    for x in range(6):
+        if max(sumc) == sumc[x]:
+            cString[28] = posPack[x]
+    M = cv.getPerspectiveTransform(dpix3, pix)
+    dst = cv.warpPerspective(botHSV, M,(50,50))
+    gMask = cv.inRange(dst, lowGreen, highGreen)
+    yMask = cv.inRange(dst, lowYellow, highYellow)
+    pMask = cv.inRange(dst, lowPink, highPink)
+    bMask = cv.inRange(dst, lowBlue, highBlue)
+    rMask = cv.inRange(dst, lowRed, highRed)
+    wMask = cv.inRange(dst, lowWhite, highWhite) - gMask - yMask - pMask - bMask - rMask
+    sumc = np.array([np.sum(gMask), np.sum(yMask), np.sum(pMask), np.sum(bMask), np.sum(wMask), np.sum(rMask)])
+    for x in range(6):
+        if max(sumc) == sumc[x]:
+            cString[29] = posPack[x]
+    M = cv.getPerspectiveTransform(dpix4, pix)
+    dst = cv.warpPerspective(botHSV, M,(50,50))
+    gMask = cv.inRange(dst, lowGreen, highGreen)
+    yMask = cv.inRange(dst, lowYellow, highYellow)
+    pMask = cv.inRange(dst, lowPink, highPink)
+    bMask = cv.inRange(dst, lowBlue, highBlue)
+    rMask = cv.inRange(dst, lowRed, highRed)
+    wMask = cv.inRange(dst, lowWhite, highWhite) - gMask - yMask - pMask - bMask - rMask
+    sumc = np.array([np.sum(gMask), np.sum(yMask), np.sum(pMask), np.sum(bMask), np.sum(wMask), np.sum(rMask)])
+    for x in range(6):
+        if max(sumc) == sumc[x]:
+            cString[30] = posPack[x]
+    M = cv.getPerspectiveTransform(dpix6, pix)
+    dst = cv.warpPerspective(botHSV, M,(50,50))
+    gMask = cv.inRange(dst, lowGreen, highGreen)
+    yMask = cv.inRange(dst, lowYellow, highYellow)
+    pMask = cv.inRange(dst, lowPink, highPink)
+    bMask = cv.inRange(dst, lowBlue, highBlue)
+    rMask = cv.inRange(dst, lowRed, highRed)
+    wMask = cv.inRange(dst, lowWhite, highWhite) - gMask - yMask - pMask - bMask - rMask
+    sumc = np.array([np.sum(gMask), np.sum(yMask), np.sum(pMask), np.sum(bMask), np.sum(wMask), np.sum(rMask)])
+    for x in range(6):
+        if max(sumc) == sumc[x]:
+            cString[32] = posPack[x]
+    M = cv.getPerspectiveTransform(dpix7, pix)
+    dst = cv.warpPerspective(botHSV, M,(50,50))
+    gMask = cv.inRange(dst, lowGreen, highGreen)
+    yMask = cv.inRange(dst, lowYellow, highYellow)
+    pMask = cv.inRange(dst, lowPink, highPink)
+    bMask = cv.inRange(dst, lowBlue, highBlue)
+    rMask = cv.inRange(dst, lowRed, highRed)
+    wMask = cv.inRange(dst, lowWhite, highWhite) - gMask - yMask - pMask - bMask - rMask
+    sumc = np.array([np.sum(gMask), np.sum(yMask), np.sum(pMask), np.sum(bMask), np.sum(wMask), np.sum(rMask)])
+    for x in range(6):
+        if max(sumc) == sumc[x]:
+            cString[33] = posPack[x]
+    M = cv.getPerspectiveTransform(dpix8, pix)
+    dst = cv.warpPerspective(botHSV, M,(50,50))
+    gMask = cv.inRange(dst, lowGreen, highGreen)
+    yMask = cv.inRange(dst, lowYellow, highYellow)
+    pMask = cv.inRange(dst, lowPink, highPink)
+    bMask = cv.inRange(dst, lowBlue, highBlue)
+    rMask = cv.inRange(dst, lowRed, highRed)
+    wMask = cv.inRange(dst, lowWhite, highWhite) - gMask - yMask - pMask - bMask - rMask
+    sumc = np.array([np.sum(gMask), np.sum(yMask), np.sum(pMask), np.sum(bMask), np.sum(wMask), np.sum(rMask)])
+    for x in range(6):
+        if max(sumc) == sumc[x]:
+            cString[34] = posPack[x]
+    M = cv.getPerspectiveTransform(dpix9, pix)
+    dst = cv.warpPerspective(botHSV, M,(50,50))
+    gMask = cv.inRange(dst, lowGreen, highGreen)
+    yMask = cv.inRange(dst, lowYellow, highYellow)
+    pMask = cv.inRange(dst, lowPink, highPink)
+    bMask = cv.inRange(dst, lowBlue, highBlue)
+    rMask = cv.inRange(dst, lowRed, highRed)
+    wMask = cv.inRange(dst, lowWhite, highWhite) - gMask - yMask - pMask - bMask - rMask
+    sumc = np.array([np.sum(gMask), np.sum(yMask), np.sum(pMask), np.sum(bMask), np.sum(wMask), np.sum(rMask)])
+    for x in range(6):
+        if max(sumc) == sumc[x]:
+            cString[35] = posPack[x]
+
+    # Left Side --------------------------------------------
+
+    M = cv.getPerspectiveTransform(lpix1, pix)
+    dst = cv.warpPerspective(botHSV, M,(50,50))
+    gMask = cv.inRange(dst, lowGreen, highGreen)
+    yMask = cv.inRange(dst, lowYellow, highYellow)
+    pMask = cv.inRange(dst, lowPink, highPink)
+    bMask = cv.inRange(dst, lowBlue, highBlue)
+    rMask = cv.inRange(dst, lowRed, highRed)
+    wMask = cv.inRange(dst, lowWhite, highWhite) - gMask - yMask - pMask - bMask - rMask
+    sumc = np.array([np.sum(gMask), np.sum(yMask), np.sum(pMask), np.sum(bMask), np.sum(wMask), np.sum(rMask)])
+    for x in range(6):
+        if max(sumc) == sumc[x]:
+            cString[36] = posPack[x]
+    M = cv.getPerspectiveTransform(lpix2, pix)
+    dst = cv.warpPerspective(botHSV, M,(50,50))
+    gMask = cv.inRange(dst, lowGreen, highGreen)
+    yMask = cv.inRange(dst, lowYellow, highYellow)
+    pMask = cv.inRange(dst, lowPink, highPink)
+    bMask = cv.inRange(dst, lowBlue, highBlue)
+    rMask = cv.inRange(dst, lowRed, highRed)
+    wMask = cv.inRange(dst, lowWhite, highWhite) - gMask - yMask - pMask - bMask - rMask
+    sumc = np.array([np.sum(gMask), np.sum(yMask), np.sum(pMask), np.sum(bMask), np.sum(wMask), np.sum(rMask)])
+    for x in range(6):
+        if max(sumc) == sumc[x]:
+            cString[37] = posPack[x]
+    M = cv.getPerspectiveTransform(lpix3, pix)
+    dst = cv.warpPerspective(botHSV, M,(50,50))
+    gMask = cv.inRange(dst, lowGreen, highGreen)
+    yMask = cv.inRange(dst, lowYellow, highYellow)
+    pMask = cv.inRange(dst, lowPink, highPink)
+    bMask = cv.inRange(dst, lowBlue, highBlue)
+    rMask = cv.inRange(dst, lowRed, highRed)
+    wMask = cv.inRange(dst, lowWhite, highWhite) - gMask - yMask - pMask - bMask - rMask
+    sumc = np.array([np.sum(gMask), np.sum(yMask), np.sum(pMask), np.sum(bMask), np.sum(wMask), np.sum(rMask)])
+    for x in range(6):
+        if max(sumc) == sumc[x]:
+            cString[38] = posPack[x]
+    M = cv.getPerspectiveTransform(lpix4, pix)
+    dst = cv.warpPerspective(botHSV, M,(50,50))
+    gMask = cv.inRange(dst, lowGreen, highGreen)
+    yMask = cv.inRange(dst, lowYellow, highYellow)
+    pMask = cv.inRange(dst, lowPink, highPink)
+    bMask = cv.inRange(dst, lowBlue, highBlue)
+    rMask = cv.inRange(dst, lowRed, highRed)
+    wMask = cv.inRange(dst, lowWhite, highWhite) - gMask - yMask - pMask - bMask - rMask
+    sumc = np.array([np.sum(gMask), np.sum(yMask), np.sum(pMask), np.sum(bMask), np.sum(wMask), np.sum(rMask)])
+    for x in range(6):
+        if max(sumc) == sumc[x]:
+            cString[39] = posPack[x]
+    M = cv.getPerspectiveTransform(lpix6, pix)
+    dst = cv.warpPerspective(botHSV, M,(50,50))
+    gMask = cv.inRange(dst, lowGreen, highGreen)
+    yMask = cv.inRange(dst, lowYellow, highYellow)
+    pMask = cv.inRange(dst, lowPink, highPink)
+    bMask = cv.inRange(dst, lowBlue, highBlue)
+    rMask = cv.inRange(dst, lowRed, highRed)
+    wMask = cv.inRange(dst, lowWhite, highWhite) - gMask - yMask - pMask - bMask - rMask
+    sumc = np.array([np.sum(gMask), np.sum(yMask), np.sum(pMask), np.sum(bMask), np.sum(wMask), np.sum(rMask)])
+    for x in range(6):
+        if max(sumc) == sumc[x]:
+            cString[41] = posPack[x]
+    M = cv.getPerspectiveTransform(lpix7, pix)
+    dst = cv.warpPerspective(botHSV, M,(50,50))
+    gMask = cv.inRange(dst, lowGreen, highGreen)
+    yMask = cv.inRange(dst, lowYellow, highYellow)
+    pMask = cv.inRange(dst, lowPink, highPink)
+    bMask = cv.inRange(dst, lowBlue, highBlue)
+    rMask = cv.inRange(dst, lowRed, highRed)
+    wMask = cv.inRange(dst, lowWhite, highWhite) - gMask - yMask - pMask - bMask - rMask
+    sumc = np.array([np.sum(gMask), np.sum(yMask), np.sum(pMask), np.sum(bMask), np.sum(wMask), np.sum(rMask)])
+    for x in range(6):
+        if max(sumc) == sumc[x]:
+            cString[42] = posPack[x]
+    M = cv.getPerspectiveTransform(lpix8, pix)
+    dst = cv.warpPerspective(botHSV, M,(50,50))
+    gMask = cv.inRange(dst, lowGreen, highGreen)
+    yMask = cv.inRange(dst, lowYellow, highYellow)
+    pMask = cv.inRange(dst, lowPink, highPink)
+    bMask = cv.inRange(dst, lowBlue, highBlue)
+    rMask = cv.inRange(dst, lowRed, highRed)
+    wMask = cv.inRange(dst, lowWhite, highWhite) - gMask - yMask - pMask - bMask - rMask
+    sumc = np.array([np.sum(gMask), np.sum(yMask), np.sum(pMask), np.sum(bMask), np.sum(wMask), np.sum(rMask)])
+    for x in range(6):
+        if max(sumc) == sumc[x]:
+            cString[43] = posPack[x]
+    M = cv.getPerspectiveTransform(lpix9, pix)
+    dst = cv.warpPerspective(botHSV, M,(50,50))
+    gMask = cv.inRange(dst, lowGreen, highGreen)
+    yMask = cv.inRange(dst, lowYellow, highYellow)
+    pMask = cv.inRange(dst, lowPink, highPink)
+    bMask = cv.inRange(dst, lowBlue, highBlue)
+    rMask = cv.inRange(dst, lowRed, highRed)
+    wMask = cv.inRange(dst, lowWhite, highWhite) - gMask - yMask - pMask - bMask - rMask
+    sumc = np.array([np.sum(gMask), np.sum(yMask), np.sum(pMask), np.sum(bMask), np.sum(wMask), np.sum(rMask)])
+    for x in range(6):
+        if max(sumc) == sumc[x]:
+            cString[44] = posPack[x]
+
+    # Back Side --------------------------------------------
+
+    M = cv.getPerspectiveTransform(bpix1, pix)
+    dst = cv.warpPerspective(topHSV, M,(50,50))
+    gMask = cv.inRange(dst, lowGreen, highGreen)
+    yMask = cv.inRange(dst, lowYellow, highYellow)
+    pMask = cv.inRange(dst, lowPink, highPink)
+    bMask = cv.inRange(dst, lowBlue, highBlue)
+    rMask = cv.inRange(dst, lowRed, highRed)
+    wMask = cv.inRange(dst, lowWhite, highWhite) - gMask - yMask - pMask - bMask - rMask
+    sumc = np.array([np.sum(gMask), np.sum(yMask), np.sum(pMask), np.sum(bMask), np.sum(wMask), np.sum(rMask)])
+    for x in range(6):
+        if max(sumc) == sumc[x]:
+            cString[45] = posPack[x]
+    M = cv.getPerspectiveTransform(bpix2, pix)
+    dst = cv.warpPerspective(topHSV, M,(50,50))
+    gMask = cv.inRange(dst, lowGreen, highGreen)
+    yMask = cv.inRange(dst, lowYellow, highYellow)
+    pMask = cv.inRange(dst, lowPink, highPink)
+    bMask = cv.inRange(dst, lowBlue, highBlue)
+    rMask = cv.inRange(dst, lowRed, highRed)
+    wMask = cv.inRange(dst, lowWhite, highWhite) - gMask - yMask - pMask - bMask - rMask
+    sumc = np.array([np.sum(gMask), np.sum(yMask), np.sum(pMask), np.sum(bMask), np.sum(wMask), np.sum(rMask)])
+    for x in range(6):
+        if max(sumc) == sumc[x]:
+            cString[46] = posPack[x]
+    M = cv.getPerspectiveTransform(bpix3, pix)
+    dst = cv.warpPerspective(topHSV, M,(50,50))
+    gMask = cv.inRange(dst, lowGreen, highGreen)
+    yMask = cv.inRange(dst, lowYellow, highYellow)
+    pMask = cv.inRange(dst, lowPink, highPink)
+    bMask = cv.inRange(dst, lowBlue, highBlue)
+    rMask = cv.inRange(dst, lowRed, highRed)
+    wMask = cv.inRange(dst, lowWhite, highWhite) - gMask - yMask - pMask - bMask - rMask
+    sumc = np.array([np.sum(gMask), np.sum(yMask), np.sum(pMask), np.sum(bMask), np.sum(wMask), np.sum(rMask)])
+    for x in range(6):
+        if max(sumc) == sumc[x]:
+            cString[47] = posPack[x]
+    M = cv.getPerspectiveTransform(bpix4, pix)
+    dst = cv.warpPerspective(topHSV, M,(50,50))
+    gMask = cv.inRange(dst, lowGreen, highGreen)
+    yMask = cv.inRange(dst, lowYellow, highYellow)
+    pMask = cv.inRange(dst, lowPink, highPink)
+    bMask = cv.inRange(dst, lowBlue, highBlue)
+    rMask = cv.inRange(dst, lowRed, highRed)
+    wMask = cv.inRange(dst, lowWhite, highWhite) - gMask - yMask - pMask - bMask - rMask
+    sumc = np.array([np.sum(gMask), np.sum(yMask), np.sum(pMask), np.sum(bMask), np.sum(wMask), np.sum(rMask)])
+    for x in range(6):
+        if max(sumc) == sumc[x]:
+            cString[48] = posPack[x]
+    M = cv.getPerspectiveTransform(bpix6, pix)
+    dst = cv.warpPerspective(topHSV, M,(50,50))
+    gMask = cv.inRange(dst, lowGreen, highGreen)
+    yMask = cv.inRange(dst, lowYellow, highYellow)
+    pMask = cv.inRange(dst, lowPink, highPink)
+    bMask = cv.inRange(dst, lowBlue, highBlue)
+    rMask = cv.inRange(dst, lowRed, highRed)
+    wMask = cv.inRange(dst, lowWhite, highWhite) - gMask - yMask - pMask - bMask - rMask
+    sumc = np.array([np.sum(gMask), np.sum(yMask), np.sum(pMask), np.sum(bMask), np.sum(wMask), np.sum(rMask)])
+    for x in range(6):
+        if max(sumc) == sumc[x]:
+            cString[50] = posPack[x]
+    M = cv.getPerspectiveTransform(bpix7, pix)
+    dst = cv.warpPerspective(topHSV, M,(50,50))
+    gMask = cv.inRange(dst, lowGreen, highGreen)
+    yMask = cv.inRange(dst, lowYellow, highYellow)
+    pMask = cv.inRange(dst, lowPink, highPink)
+    bMask = cv.inRange(dst, lowBlue, highBlue)
+    rMask = cv.inRange(dst, lowRed, highRed)
+    wMask = cv.inRange(dst, lowWhite, highWhite) - gMask - yMask - pMask - bMask - rMask
+    sumc = np.array([np.sum(gMask), np.sum(yMask), np.sum(pMask), np.sum(bMask), np.sum(wMask), np.sum(rMask)])
+    for x in range(6):
+        if max(sumc) == sumc[x]:
+            cString[51] = posPack[x]
+    M = cv.getPerspectiveTransform(bpix8, pix)
+    dst = cv.warpPerspective(topHSV, M,(50,50))
+    gMask = cv.inRange(dst, lowGreen, highGreen)
+    yMask = cv.inRange(dst, lowYellow, highYellow)
+    pMask = cv.inRange(dst, lowPink, highPink)
+    bMask = cv.inRange(dst, lowBlue, highBlue)
+    rMask = cv.inRange(dst, lowRed, highRed)
+    wMask = cv.inRange(dst, lowWhite, highWhite) - gMask - yMask - pMask - bMask - rMask
+    sumc = np.array([np.sum(gMask), np.sum(yMask), np.sum(pMask), np.sum(bMask), np.sum(wMask), np.sum(rMask)])
+    for x in range(6):
+        if max(sumc) == sumc[x]:
+            cString[52] = posPack[x]
+    M = cv.getPerspectiveTransform(bpix9, pix)
+    dst = cv.warpPerspective(topHSV, M,(50,50))
+    gMask = cv.inRange(dst, lowGreen, highGreen)
+    yMask = cv.inRange(dst, lowYellow, highYellow)
+    pMask = cv.inRange(dst, lowPink, highPink)
+    bMask = cv.inRange(dst, lowBlue, highBlue)
+    rMask = cv.inRange(dst, lowRed, highRed)
+    wMask = cv.inRange(dst, lowWhite, highWhite) - gMask - yMask - pMask - bMask - rMask
+    sumc = np.array([np.sum(gMask), np.sum(yMask), np.sum(pMask), np.sum(bMask), np.sum(wMask), np.sum(rMask)])
+    for x in range(6):
+        if max(sumc) == sumc[x]:
+            cString[53] = posPack[x]
+
+def sendString():
+    print("Kamera fant en løsning!")
+    bufferString = list("t")
+    exString = list(aSolution)
+    for x in range(len(exString)):
+        if exString[x] == "(":
+            break
+        if exString[x] == "U":
+            if exString[x+1] == "1":
+                bufferString.append("A")
+            elif exString[x+1] == "2":
+                bufferString.append("B")
+            elif exString[x+1] == "3":
+                bufferString.append("C")
+        elif exString[x] == "R":
+            if exString[x+1] == "1":
+                bufferString.append("D")
+            elif exString[x+1] == "2":
+                bufferString.append("E")
+            elif exString[x+1] == "3":
+                bufferString.append("F")
+        elif exString[x] == "F":
+            if exString[x+1] == "1":
+                bufferString.append("G")
+            elif exString[x+1] == "2":
+                bufferString.append("H")
+            elif exString[x+1] == "3":
+                bufferString.append("I")
+        elif exString[x] == "D":
+            if exString[x+1] == "1":
+                bufferString.append("J")
+            elif exString[x+1] == "2":
+                bufferString.append("K")
+            elif exString[x+1] == "3":
+                bufferString.append("L")
+        elif exString[x] == "L":
+            if exString[x+1] == "1":
+                bufferString.append("M")
+            elif exString[x+1] == "2":
+                bufferString.append("N")
+            elif exString[x+1] == "3":
+                bufferString.append("O")
+        elif exString[x] == "B":
+            if exString[x+1] == "1":
+                bufferString.append("P")
+            elif exString[x+1] == "2":
+                bufferString.append("Q")
+            elif exString[x+1] == "3":
+                bufferString.append("R")
+    msg2Send = "".join(bufferString)
+    msg2Send += "\n"
+    serA.write(msg2Send.encode("utf-8"))
+
+def awaitResponse(timeA, timeA2, timeA3):
+    waitTimeout = time.time()
+    print("Venter på svar fra Arduino")
+    serA.reset_input_buffer()
+    while True:
+        if serA.in_waiting > 0:
+            timeC = time.time()
+            timeB = timeC - timeA # This is the entire solve time
+            timeB2 = timeA2 - timeA # This is the Camera Vision time
+            timeB3 = timeA3 - timeA2 # This is calculation time
+            timeB4 = timeC - timeA3 # This is the actuation time
+            print('Full Solve Time:', timeB)
+            print('Camera Vision:', timeB2)
+            print('Calculation:', timeB3)
+            print('Actuation:', timeB4)
+            print("Kuben er løst!")
+            break
+        nowTime = time.time() - waitTimeout
+        if nowTime > 10:
+            print("Timeout")
+            break
+
+def checkPixels():
+    for i in range(len(upix1)):
+        cv.line(frameTop, tuple(upix1[i]), tuple(upix1[(i+1)%len(upix1)]), (255,255,255), 2)
+    for i in range(len(upix2)):
+        cv.line(frameTop, tuple(upix2[i]), tuple(upix2[(i+1)%len(upix2)]), (255,255,255), 2)
+    for i in range(len(upix3)):
+        cv.line(frameTop, tuple(upix3[i]), tuple(upix3[(i+1)%len(upix3)]), (255,255,255), 2)
+    for i in range(len(upix3)):
+        cv.line(frameTop, tuple(upix3[i]), tuple(upix3[(i+1)%len(upix3)]), (255,255,255), 2)
+    for i in range(len(upix4)):
+        cv.line(frameTop, tuple(upix4[i]), tuple(upix4[(i+1)%len(upix4)]), (255,255,255), 2)
+    for i in range(len(upix6)):
+        cv.line(frameTop, tuple(upix6[i]), tuple(upix6[(i+1)%len(upix6)]), (255,255,255), 2)
+    for i in range(len(upix7)):
+        cv.line(frameTop, tuple(upix7[i]), tuple(upix7[(i+1)%len(upix7)]), (255,255,255), 2)
+    for i in range(len(upix8)):
+        cv.line(frameTop, tuple(upix8[i]), tuple(upix8[(i+1)%len(upix8)]), (255,255,255), 2)
+    for i in range(len(upix9)):
+        cv.line(frameTop, tuple(upix9[i]), tuple(upix9[(i+1)%len(upix9)]), (255,255,255), 2)
+    for i in range(len(rpix1)):
+        cv.line(frameTop, tuple(rpix1[i]), tuple(rpix1[(i+1)%len(rpix1)]), (255,255,255), 2)
+    for i in range(len(rpix2)):
+        cv.line(frameTop, tuple(rpix2[i]), tuple(rpix2[(i+1)%len(rpix2)]), (255,255,255), 2)
+    for i in range(len(rpix3)):
+        cv.line(frameTop, tuple(rpix3[i]), tuple(rpix3[(i+1)%len(rpix3)]), (255,255,255), 2)
+    for i in range(len(rpix3)):
+        cv.line(frameTop, tuple(rpix3[i]), tuple(rpix3[(i+1)%len(rpix3)]), (255,255,255), 2)
+    for i in range(len(rpix4)):
+        cv.line(frameTop, tuple(rpix4[i]), tuple(rpix4[(i+1)%len(rpix4)]), (255,255,255), 2)
+    for i in range(len(rpix6)):
+        cv.line(frameTop, tuple(rpix6[i]), tuple(rpix6[(i+1)%len(rpix6)]), (255,255,255), 2)
+    for i in range(len(rpix7)):
+        cv.line(frameTop, tuple(rpix7[i]), tuple(rpix7[(i+1)%len(rpix7)]), (255,255,255), 2)
+    for i in range(len(rpix8)):
+        cv.line(frameTop, tuple(rpix8[i]), tuple(rpix8[(i+1)%len(rpix8)]), (255,255,255), 2)
+    for i in range(len(rpix9)):
+        cv.line(frameTop, tuple(rpix9[i]), tuple(rpix9[(i+1)%len(rpix9)]), (255,255,255), 2)
+    for i in range(len(bpix1)):
+        cv.line(frameTop, tuple(bpix1[i]), tuple(bpix1[(i+1)%len(bpix1)]), (255,255,255), 2)
+    for i in range(len(bpix2)):
+        cv.line(frameTop, tuple(bpix2[i]), tuple(bpix2[(i+1)%len(bpix2)]), (255,255,255), 2)
+    for i in range(len(bpix3)):
+        cv.line(frameTop, tuple(bpix3[i]), tuple(bpix3[(i+1)%len(bpix3)]), (255,255,255), 2)
+    for i in range(len(bpix3)):
+        cv.line(frameTop, tuple(bpix3[i]), tuple(bpix3[(i+1)%len(bpix3)]), (255,255,255), 2)
+    for i in range(len(bpix4)):
+        cv.line(frameTop, tuple(bpix4[i]), tuple(bpix4[(i+1)%len(bpix4)]), (255,255,255), 2)
+    for i in range(len(bpix6)):
+        cv.line(frameTop, tuple(bpix6[i]), tuple(bpix6[(i+1)%len(bpix6)]), (255,255,255), 2)
+    for i in range(len(bpix7)):
+        cv.line(frameTop, tuple(bpix7[i]), tuple(bpix7[(i+1)%len(bpix7)]), (255,255,255), 2)
+    for i in range(len(bpix8)):
+        cv.line(frameTop, tuple(bpix8[i]), tuple(bpix8[(i+1)%len(bpix8)]), (255,255,255), 2)
+    for i in range(len(bpix9)):
+        cv.line(frameTop, tuple(bpix9[i]), tuple(bpix9[(i+1)%len(bpix9)]), (255,255,255), 2)
+    for i in range(len(fpix1)):
+        cv.line(frameBot, tuple(fpix1[i]), tuple(fpix1[(i+1)%len(fpix1)]), (255,255,255), 2)
+    for i in range(len(fpix2)):
+        cv.line(frameBot, tuple(fpix2[i]), tuple(fpix2[(i+1)%len(fpix2)]), (255,255,255), 2)
+    for i in range(len(fpix3)):
+        cv.line(frameBot, tuple(fpix3[i]), tuple(fpix3[(i+1)%len(fpix3)]), (255,255,255), 2)
+    for i in range(len(fpix3)):
+        cv.line(frameBot, tuple(fpix3[i]), tuple(fpix3[(i+1)%len(fpix3)]), (255,255,255), 2)
+    for i in range(len(fpix4)):
+        cv.line(frameBot, tuple(fpix4[i]), tuple(fpix4[(i+1)%len(fpix4)]), (255,255,255), 2)
+    for i in range(len(fpix6)):
+        cv.line(frameBot, tuple(fpix6[i]), tuple(fpix6[(i+1)%len(fpix6)]), (255,255,255), 2)
+    for i in range(len(fpix7)):
+        cv.line(frameBot, tuple(fpix7[i]), tuple(fpix7[(i+1)%len(fpix7)]), (255,255,255), 2)
+    for i in range(len(fpix8)):
+        cv.line(frameBot, tuple(fpix8[i]), tuple(fpix8[(i+1)%len(fpix8)]), (255,255,255), 2)
+    for i in range(len(fpix9)):
+        cv.line(frameBot, tuple(fpix9[i]), tuple(fpix9[(i+1)%len(fpix9)]), (255,255,255), 2)
+    for i in range(len(dpix1)):
+        cv.line(frameBot, tuple(dpix1[i]), tuple(dpix1[(i+1)%len(dpix1)]), (255,255,255), 2)
+    for i in range(len(dpix2)):
+        cv.line(frameBot, tuple(dpix2[i]), tuple(dpix2[(i+1)%len(dpix2)]), (255,255,255), 2)
+    for i in range(len(dpix3)):
+        cv.line(frameBot, tuple(dpix3[i]), tuple(dpix3[(i+1)%len(dpix3)]), (255,255,255), 2)
+    for i in range(len(dpix3)):
+        cv.line(frameBot, tuple(dpix3[i]), tuple(dpix3[(i+1)%len(dpix3)]), (255,255,255), 2)
+    for i in range(len(dpix4)):
+        cv.line(frameBot, tuple(dpix4[i]), tuple(dpix4[(i+1)%len(dpix4)]), (255,255,255), 2)
+    for i in range(len(dpix6)):
+        cv.line(frameBot, tuple(dpix6[i]), tuple(dpix6[(i+1)%len(dpix6)]), (255,255,255), 2)
+    for i in range(len(dpix7)):
+        cv.line(frameBot, tuple(dpix7[i]), tuple(dpix7[(i+1)%len(dpix7)]), (255,255,255), 2)
+    for i in range(len(dpix8)):
+        cv.line(frameBot, tuple(dpix8[i]), tuple(dpix8[(i+1)%len(dpix8)]), (255,255,255), 2)
+    for i in range(len(dpix9)):
+        cv.line(frameBot, tuple(dpix9[i]), tuple(dpix9[(i+1)%len(dpix9)]), (255,255,255), 2)
+    for i in range(len(lpix1)):
+        cv.line(frameBot, tuple(lpix1[i]), tuple(lpix1[(i+1)%len(lpix1)]), (255,255,255), 2)
+    for i in range(len(lpix2)):
+        cv.line(frameBot, tuple(lpix2[i]), tuple(lpix2[(i+1)%len(lpix2)]), (255,255,255), 2)
+    for i in range(len(lpix3)):
+        cv.line(frameBot, tuple(lpix3[i]), tuple(lpix3[(i+1)%len(lpix3)]), (255,255,255), 2)
+    for i in range(len(lpix3)):
+        cv.line(frameBot, tuple(lpix3[i]), tuple(lpix3[(i+1)%len(lpix3)]), (255,255,255), 2)
+    for i in range(len(lpix4)):
+        cv.line(frameBot, tuple(lpix4[i]), tuple(lpix4[(i+1)%len(lpix4)]), (255,255,255), 2)
+    for i in range(len(lpix6)):
+        cv.line(frameBot, tuple(lpix6[i]), tuple(lpix6[(i+1)%len(lpix6)]), (255,255,255), 2)
+    for i in range(len(lpix7)):
+        cv.line(frameBot, tuple(lpix7[i]), tuple(lpix7[(i+1)%len(lpix7)]), (255,255,255), 2)
+    for i in range(len(lpix8)):
+        cv.line(frameBot, tuple(lpix8[i]), tuple(lpix8[(i+1)%len(lpix8)]), (255,255,255), 2)
+    for i in range(len(lpix9)):
+        cv.line(frameBot, tuple(lpix9[i]), tuple(lpix9[(i+1)%len(lpix9)]), (255,255,255), 2)
+    cv.imshow('Top Camera', frameTop)
+    cv.imshow('Bottom Camera', frameBot)
+    if cv.waitKey(20) == ord("q"): 
+        topSource.release()
+        botSource.release()
+        cv.destroyAllWindows()
+
+print("klar til å motta data")
+# Jetson will continuosly listen at its serial com with Raspberry untill it recieves a byte.
+while True:
+    ret, frameTop = topSource.read()
+    ret2, frameBot = botSource.read()
+    topHSV = cv.cvtColor(frameTop, cv.COLOR_BGR2HSV, 3)
+    botHSV = cv.cvtColor(frameBot, cv.COLOR_BGR2HSV, 3)
+    #checkPixels()
+
+    if serP.in_waiting > 0:
+        try:
+            line = serP.readline().decode("UTF-8").rstrip()
+            print(ord(line))
+            if ord(line) >= 97 and ord(line) <= 108:
+                bufferLine = line
+                bufferLine += "\n"
+                print(bufferLine)
+                serA.write(bufferLine.encode("utf-8"))
+            elif ord(line) >= 65 and ord(line) <= 82:
+                bufferLine = 't'
+                bufferLine += line
+                bufferLine += '\n'
+                print(bufferLine)
+                serA.write(bufferLine.encode("utf-8"))
+                time2 = time.time()
+
+            elif ord(line) == 83:
+                time3 = time.time()
+                time4 = time3
+                scrambleCube()
+
+            elif ord(line) == 84: #Decrease Step Delay
+                bufferLine = line
+                bufferLine += '\n'
+                print(bufferLine)
+                serA.write(bufferLine.encode("utf-8"))
+            elif ord(line) == 85: #Increase Step Delay
+                bufferLine = line
+                bufferLine += "\n"
+                serA.write(bufferLine.encode("utf-8"))
+            elif ord(line) == 122: #Solve the Cube with Camera Vision
+                solutionTimeStart = time.time()
+                solutionState = 0
+                while solutionState == 0:
+                    timeStart = time.time()
+                    findFaces()
+                    timeStart2 = time.time()
+                    try:
+                        aSolution = sv.solve(cString, 23, 0)
+                        if aSolution[1] == '1' or aSolution[1] == '2' or aSolution[1] == '3':
+                            solutionState = 1
+                            timeStart3 = time.time()
+                            sendString()
+                            awaitResponse(timeStart, timeStart2, timeStart3)
+                            print("Ferdig")
+                    except Exception as e:
+                        pass
+                    solutionTimeout = time.time() - solutionTimeStart
+                    if solutionTimeout > 10:
+                        print("Timeout Solve")
+                        serP.reset_input_buffer()
+                        break
+            elif ord(line) == 89:
+                subprocess.run(['sudo', 'shutdown', '-h', 'now'])
+        except Exception as e:
+            pass
